@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 import pika
-import json
-from collections import namedtuple
-
-def _json_object_hook(d): return namedtuple('X', d.keys())(*d.values())
-def json2obj(data): return json.loads(data, object_hook=_json_object_hook)
-
+import game_objects
 
 #------------------------------------------------------------------------------
 def on_request(ch, method, props, body):
 
-    request = json2obj(body.decode('utf-8'))
+    # request = game_objects.json2obj(body.decode('utf-8'))
+    request = game_objects.Action.fromJson(body.decode('utf-8'))
 
     print (f"Player {request.value} has joined the game")
 
+    ch.basic_publish(
+        exchange='',
+        routing_key='log',
+        body=f"Player {request.value} has joined the game"
+    )
     ch.basic_publish(
         exchange='',
         routing_key=props.reply_to,
@@ -30,6 +31,7 @@ connection = pika.BlockingConnection(
 channel = connection.channel()
 
 channel.queue_declare(queue='game')
+channel.queue_declare(queue='log')
 
 channel.basic_qos(prefetch_count=1)
 channel.basic_consume(queue='game', on_message_callback=on_request)
