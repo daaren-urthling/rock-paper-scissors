@@ -4,34 +4,45 @@ import uuid
 import json
 import game_objects
 
-def on_response(ch, method, props, body):
-    print("[private] ",body.decode('utf-8'))
+playerID = None
+
+def on_private(ch, method, props, body):
+    msg = game_objects.Message.fromJson(body.decode('utf-8'))
+    if msg.action == "message":
+        print("[private] ", msg.value)
+    elif msg.action == "joined":
+        print("[private] ", msg.value)
+        playerID = msg.playerID
+        print(f"joined as Player {playerID}")
+
 
 def on_log(ch, method, props, body):
-    print(body.decode('utf-8'))
+    msg = game_objects.Message.fromJson(body.decode('utf-8'))
+    if msg.action == "message":
+        print(msg.value)
 
 server = input("Game Server ")
 connection = pika.BlockingConnection(pika.ConnectionParameters(host=server))
 channel = connection.channel()
 result = channel.queue_declare(queue='', exclusive=True)
-callback_queue = result.method.queue
+private_queue = result.method.queue
 channel.basic_consume(
-    queue=callback_queue,
-    on_message_callback=on_response,
+    queue=private_queue,
+    on_message_callback=on_private,
     auto_ack=True
 )
 channel.basic_consume(
-    on_message_callback=on_log,
     queue='log',
+    on_message_callback=on_log,
     auto_ack=True
 )
 player = input("Player name ")
-request = game_objects.Action('join', player)
+request = game_objects.Message('join', player)
 channel.basic_publish(
     exchange='',
     routing_key='game',
     properties=pika.BasicProperties(
-        reply_to=callback_queue,
+        reply_to=private_queue,
         correlation_id='0'
     ),
     body=request.toJson()
